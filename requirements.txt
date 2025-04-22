@@ -1,5 +1,5 @@
-streamlit
-pdf2image
-opencv-python-headless
-pillow
-pytesseract
++pymupdf           # PyMuPDF: PDF読み込み／画像変換
++streamlit
++opencv-python-headless
++pillow
++pytesseract
