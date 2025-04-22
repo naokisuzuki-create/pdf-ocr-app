@@ -8,7 +8,7 @@ Usage:
     macOS/Linux: source .venv/bin/activate
 
  2. 必要パッケージをインストール
-    pip install streamlit pymupdf opencv-python-headless pillow easyocr
+    pip install streamlit pdf2image opencv-python pillow pytesseract
 
  3. アプリを起動
     streamlit run ocr_app.py
@@ -16,11 +16,12 @@ Usage:
  4. ブラウザで http://localhost:8501 にアクセスし、PDF をアップロードして OCR
 """
 import os
+import sys
 import cv2
 import numpy as np
-import fitz  # PyMuPDF
+from pdf2image import convert_from_bytes
 from PIL import Image
-import easyocr
+import pytesseract
 import streamlit as st
 
 # 画像の前処理関数
@@ -37,9 +38,7 @@ def preprocess_image(img):
             angle = -angle
         h, w = denoised.shape
         M = cv2.getRotationMatrix2D((w/2, h/2), angle, 1.0)
-        denoised = cv2.warpAffine(
-            denoised, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE
-        )
+        denoised = cv2.warpAffine(denoised, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
     return denoised
 
 # Streamlit アプリ設定
@@ -54,38 +53,34 @@ if not uploaded_file:
 
 # オプション設定
 dpi = st.slider("画像変換 DPI", 100, 600, 200, step=50)
-langs = st.multiselect("OCR 言語 (EasyOCR) (例: ja, en)", ["ja", "en"], default=["ja", "en"])
+langs = st.multiselect("OCR 言語", ["jpn", "eng"], default=["jpn", "eng"])
 
 # OCR 実行
 if st.button("OCR 実行"):
-    with st.spinner("処理中... この処理には時間がかかる場合があります"):
+    with st.spinner("処理中..."):
         pdf_bytes = uploaded_file.read()
-
-        # PyMuPDF で PDF を PIL.Image リストに変換
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        pages = []
-        for i in range(doc.page_count):
-            page = doc.load_page(i)
-            pix = page.get_pixmap(dpi=dpi, colorspace=fitz.csRGB)
-            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-            pages.append(img)
-        doc.close()
-
-        # EasyOCR Reader の初期化（GPU=False）
-        reader = easyocr.Reader(langs, gpu=False)
-        all_text = []
-        for idx, pil_img in enumerate(pages, start=1):
-            # PIL→OpenCV
+        pages = convert_from_bytes(pdf_bytes, dpi=dpi)
+        texts = []
+        for i, pil_img in enumerate(pages, start=1):
             img_cv = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-            proc_img = preprocess_image(img_cv)
-            # OCR 実行
-            results = reader.readtext(proc_img, detail=0)
-            text = "\n".join(results)
-            all_text.append(f"--- ページ {idx} ---\n" + text)
-        full_text = "\n".join(all_text)
-
+            proc = preprocess_image(img_cv)
+            texts.append(f"--- ページ {i} ---\n" + pytesseract.image_to_string(proc, lang='+'.join(langs)))
+        result_text = "\n".join(texts)
     st.success("OCR 完了！")
-    st.text_area("OCR 結果", full_text, height=400)
-    # ダウンロードボタン
-    out_name = os.path.splitext(uploaded_file.name)[0] + '_output.txt'
-    st.download_button("テキストをダウンロード", data=full_text, file_name=out_name)
+    st.text_area("OCR結果", result_text, height=400)
+    out_file = os.path.splitext(uploaded_file.name)[0] + '_output.txt'
+    st.download_button("テキストをダウンロード", data=result_text, file_name=out_file)
+
+# EXE 版で実行されたときの処理
+if getattr(sys, 'frozen', False):
+    import os
+    os.environ['STREAMLIT_GLOBAL_DEVELOPMENT_MODE'] = 'false'
+    import streamlit.web.cli as stcli
+    sys.argv = [
+        'streamlit',
+        'run',
+        os.path.abspath(sys.executable),
+        '--server.port=8501',
+        '--server.headless=true'
+    ]
+    sys.exit(stcli.main())

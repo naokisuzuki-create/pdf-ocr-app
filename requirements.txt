@@ -1,5 +1,5 @@
 streamlit
-pymupdf
+pytesseract
+pdf2image
 opencv-python-headless
 pillow
-easyocr
