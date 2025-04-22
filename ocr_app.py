@@ -1,16 +1,16 @@
 # ocr_app.py
 """
-Streamlit を使った PDF OCR アプリ
+Streamlit を使った PDF OCR アプリ（Cloud対応版）
 
 Usage:
  1. 仮想環境を有効化
-    Windows:  .venv\\Scripts\\activate
+    Windows:  .venv\Scripts\activate
     macOS/Linux: source .venv/bin/activate
 
  2. 必要パッケージをインストール
-    pip install streamlit pdf2image opencv-python pillow pytesseract
+    pip install -r requirements.txt
 
- 3. アプリを起動
+ 3. アプリを起動（ローカル）
     streamlit run ocr_app.py
 
  4. ブラウザで http://localhost:8501 にアクセスし、PDF をアップロードして OCR
@@ -19,10 +19,34 @@ import os
 import sys
 import cv2
 import numpy as np
-from pdf2image import convert_from_bytes
 from PIL import Image
 import pytesseract
 import streamlit as st
+
+# pdf2imageはpopplerが必要（Streamlit Cloudでは使えない）
+try:
+    from pdf2image import convert_from_bytes
+    PDF2IMAGE_AVAILABLE = True
+except ImportError:
+    PDF2IMAGE_AVAILABLE = False
+
+# Streamlit アプリ設定
+st.set_page_config(page_title="PDF OCR", page_icon="📄")
+st.title("PDF OCR アプリ 📄")
+
+if not PDF2IMAGE_AVAILABLE:
+    st.error("pdf2image を使うには poppler が必要です。この環境（Streamlit Cloud）では動作しません。代替案：EasyOCR を使用してください。")
+    st.stop()
+
+# ファイルアップロード UI
+uploaded_file = st.file_uploader("PDFファイルをアップロード", type=["pdf"])
+if not uploaded_file:
+    st.info("まずは PDF ファイルをアップロードしてください。")
+    st.stop()
+
+# オプション設定
+dpi = st.slider("画像変換 DPI", 100, 600, 200, step=50)
+langs = st.multiselect("OCR 言語", ["jpn", "eng"], default=["jpn", "eng"])
 
 # 画像の前処理関数
 def preprocess_image(img):
@@ -40,20 +64,6 @@ def preprocess_image(img):
         M = cv2.getRotationMatrix2D((w/2, h/2), angle, 1.0)
         denoised = cv2.warpAffine(denoised, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
     return denoised
-
-# Streamlit アプリ設定
-st.set_page_config(page_title="PDF OCR", page_icon="📄")
-st.title("PDF OCR アプリ 📄")
-
-# ファイルアップロード UI
-uploaded_file = st.file_uploader("PDFファイルをアップロード", type=["pdf"])
-if not uploaded_file:
-    st.info("まずは PDF ファイルをアップロードしてください。")
-    st.stop()
-
-# オプション設定
-dpi = st.slider("画像変換 DPI", 100, 600, 200, step=50)
-langs = st.multiselect("OCR 言語", ["jpn", "eng"], default=["jpn", "eng"])
 
 # OCR 実行
 if st.button("OCR 実行"):
@@ -73,7 +83,6 @@ if st.button("OCR 実行"):
 
 # EXE 版で実行されたときの処理
 if getattr(sys, 'frozen', False):
-    import os
     os.environ['STREAMLIT_GLOBAL_DEVELOPMENT_MODE'] = 'false'
     import streamlit.web.cli as stcli
     sys.argv = [
