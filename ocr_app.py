@@ -9,7 +9,7 @@ Usage:
     macOS/Linux: source .venv/bin/activate
 
  2. 必要パッケージをインストール
-    pip install streamlit pdf2image opencv-python pillow pytesseract
+    pip install streamlit pymupdf opencv-python-headless pillow pytesseract
 
  3. アプリを起動
     * 通常 Python版: streamlit run ocr_app.py
@@ -21,7 +21,7 @@ import os
 import sys
 import cv2
 import numpy as np
-from pdf2image import convert_from_bytes
+import fitz  # PyMuPDF を使う
 from PIL import Image
 import pytesseract
 import streamlit as st
@@ -60,7 +60,14 @@ langs = st.multiselect("OCR 言語", ["jpn", "eng"], default=["jpn", "eng"])
 if st.button("OCR 実行"):
     with st.spinner("処理中..."):
         pdf_bytes = uploaded_file.read()
-        pages = convert_from_bytes(pdf_bytes, dpi=dpi)
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        pages = []
+        for i in range(doc.page_count):
+          page = doc.load_page(i)
+          pix = page.get_pixmap(dpi=dpi, colorspace=fitz.csRGB)
+          img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+          pages.append(img)
+        doc.close()
         texts = []
         for i, pil_img in enumerate(pages, start=1):
             img_cv = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
