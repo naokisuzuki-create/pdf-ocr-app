@@ -16,7 +16,6 @@ Usage:
  4. ブラウザで http://localhost:8501 にアクセスし、PDF をアップロードして OCR
 """
 import os
-import sys
 import cv2
 import numpy as np
 import fitz  # PyMuPDF
@@ -61,7 +60,8 @@ langs = st.multiselect("OCR 言語 (EasyOCR) (例: ja, en)", ["ja", "en"], defau
 if st.button("OCR 実行"):
     with st.spinner("処理中... この処理には時間がかかる場合があります"):
         pdf_bytes = uploaded_file.read()
-        # PyMuPDF で PDF を画像に変換
+
+        # PyMuPDF で PDF を PIL.Image リストに変換
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         pages = []
         for i in range(doc.page_count):
@@ -89,5 +89,3 @@ if st.button("OCR 実行"):
     # ダウンロードボタン
     out_name = os.path.splitext(uploaded_file.name)[0] + '_output.txt'
     st.download_button("テキストをダウンロード", data=full_text, file_name=out_name)
-
-
